@@ -62,9 +62,10 @@ final class SysConfig
         $time = defined("BUILD_TIME") ? substr(str_replace("-", "", constant("BUILD_TIME")), 0, 8) : null;
         $hash = defined("BUILD_HASH") ? substr(constant("BUILD_HASH"), 0, 7) : null;
         $git = file_exists(".git") ? "git" : null;
+        $fork = "gabbah-draws";
 
         if ($full) {
-            return $ver . ($time ? "-$time" : "") . ($hash ? "-$hash" : "") . ($git ? "-$git" : "");
+            return $ver . ($time ? "-$time" : "") . ($hash ? "-$hash" : "") . ($fork ? "-$fork" : "") . ($git ? "-$git-" : "");
         }
         return $ver;
     }
