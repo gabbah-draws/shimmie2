@@ -95,12 +95,11 @@ function _image_to_id(Image $image): int
 
 /**
  * @phpstan-type PoolHistory array{id:int,pool_id:int,title:string,user_name:string,action:int,images:string,count:int,date:string}
+ * @extends Extension<PoolsTheme>
  */
 final class Pools extends Extension
 {
     public const KEY = "pools";
-    /** @var PoolsTheme */
-    protected Themelet $theme;
 
     public function onInitExt(InitExtEvent $event): void
     {
@@ -234,11 +233,15 @@ final class Pools extends Extension
             $pool = $this->get_single_pool($pool_id);
             self::assert_permission($user, $pool);
 
-            $image_ids = $database->get_col(
-                "SELECT image_id FROM pool_images WHERE pool_id=:pid ORDER BY image_order ASC",
+            $image_rows = $database->get_all(
+                "SELECT images.*, pool_images.image_order
+                FROM images
+                JOIN pool_images ON images.id = pool_images.image_id
+                WHERE pool_images.pool_id = :pid
+                ORDER BY pool_images.image_order ASC",
                 ["pid" => $pool_id]
             );
-            $images = array_filter(array_map(Image::by_id(...), $image_ids));
+            $images = array_map(fn ($row) => new Image($row), $image_rows);
             $this->theme->edit_order($pool, $images);
         }
         if ($event->page_matches("pool/save_order/{pool_id}", method: "POST")) {
@@ -292,7 +295,7 @@ final class Pools extends Extension
 
             $images = Search::find_images(
                 limit: Ctx::$config->get(PoolsConfig::MAX_IMPORT_RESULTS),
-                tags: Tag::explode($event->POST->req("pool_tag"))
+                terms: SearchTerm::explode($event->POST->req("pool_tag"))
             );
             $this->theme->pool_result($images, $pool);
         }
@@ -423,7 +426,7 @@ final class Pools extends Extension
 
     public function onSearchTermParse(SearchTermParseEvent $event): void
     {
-        if ($matches = $event->matches("/^pool[=|:]([0-9]+|any|none)$/i")) {
+        if ($matches = $event->matches("/^pool[=:]([0-9]+|any|none)$/i")) {
             $poolID = $matches[1];
 
             if (\Safe\preg_match("/^(any|none)$/", $poolID)) {
@@ -432,7 +435,7 @@ final class Pools extends Extension
             } else {
                 $event->add_querylet(new Querylet("images.id IN (SELECT DISTINCT image_id FROM pool_images WHERE pool_id = $poolID)"));
             }
-        } elseif ($matches = $event->matches("/^pool_by_name[=|:](.*)$/i")) {
+        } elseif ($matches = $event->matches("/^pool_by_name[=:](.*)$/i")) {
             $poolTitle = str_replace("_", " ", $matches[1]);
 
             $pool = $this->get_single_pool_from_title($poolTitle);
@@ -441,7 +444,7 @@ final class Pools extends Extension
                 $poolID = $pool->id;
             }
             $event->add_querylet(new Querylet("images.id IN (SELECT DISTINCT image_id FROM pool_images WHERE pool_id = $poolID)"));
-        } elseif ($matches = $event->matches("/^pool_id[=|:](.*)$/i")) {
+        } elseif ($matches = $event->matches("/^pool_id[=:](.*)$/i")) {
             $poolID = str_replace("_", " ", $matches[1]);
             $event->add_querylet(new Querylet("images.id IN (SELECT DISTINCT image_id FROM pool_images WHERE pool_id = $poolID)"));
         }
@@ -450,14 +453,14 @@ final class Pools extends Extension
 
     public function onTagTermCheck(TagTermCheckEvent $event): void
     {
-        if ($event->matches("/^pool[=|:]([^:]*|lastcreated):?([0-9]*)$/i")) {
+        if ($event->matches("/^pool[=:]([^:]*|lastcreated):?([0-9]*)$/i")) {
             $event->metatag = true;
         }
     }
 
     public function onTagTermParse(TagTermParseEvent $event): void
     {
-        if ($matches = $event->matches("/^pool[=|:]([^:]*|lastcreated):?([0-9]*)$/i")) {
+        if ($matches = $event->matches("/^pool[=:]([^:]*|lastcreated):?([0-9]*)$/i")) {
             $poolTag = str_replace("_", " ", $matches[1]);
 
             $pool = null;
@@ -480,19 +483,17 @@ final class Pools extends Extension
     {
         global $database;
 
-        if (!Ctx::$user->can(PoolsPermission::UPDATE)) {
-            $options = $database->get_pairs("SELECT id,title FROM pools ORDER BY title");
+        $options = $database->get_pairs("SELECT id,title FROM pools ORDER BY title");
 
-            // TODO: Don't cast into strings, make BABBE accept HTMLElement instead.
-            $event->add_action("bulk_pool_add_existing", "Add To (P)ool", "p", "", $this->theme->get_bulk_pool_selector($options));
-            $event->add_action("bulk_pool_add_new", "Create Pool", "", "", $this->theme->get_bulk_pool_input($event->search_terms));
-        }
+        // TODO: Don't cast into strings, make BABBE accept HTMLElement instead.
+        $event->add_action("pool-extend", "Add To (P)ool", "p", "", $this->theme->get_bulk_pool_selector($options), permission: PoolsPermission::UPDATE);
+        $event->add_action("pool-create", "Create Pool", "", "", $this->theme->get_bulk_pool_input($event->search_terms), permission: PoolsPermission::UPDATE);
     }
 
     public function onBulkAction(BulkActionEvent $event): void
     {
         switch ($event->action) {
-            case "bulk_pool_add_existing":
+            case "pool-extend":
                 $pool_id = intval($event->params['bulk_pool_select']);
                 $pool = $this->get_single_pool($pool_id);
 
@@ -502,7 +503,7 @@ final class Pools extends Extension
                     );
                 }
                 break;
-            case "bulk_pool_add_new":
+            case "pool-create":
                 $new_pool_title = $event->params->req('bulk_pool_new');
                 $pce = send_event(new PoolCreationEvent($new_pool_title));
                 send_event(new PoolAddPostsEvent($pce->new_id, iterator_map_to_array(_image_to_id(...), $event->items)));

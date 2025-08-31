@@ -25,7 +25,7 @@ class PoolsTheme extends Themelet
         //TODO: Use a 3 column table?
         $linksPools = emptyHTML();
         foreach ($navIDs as $poolID => $poolInfo) {
-            $div = DIV(A(["href" => "pool/view/" . $poolID], $poolInfo["info"]->title));
+            $div = DIV(A(["href" => make_link("pool/view/" . $poolID)], $poolInfo["info"]->title));
 
             if (!empty($poolInfo["nav"])) {
                 if (!empty($poolInfo["nav"]["prev"])) {
@@ -351,7 +351,7 @@ class PoolsTheme extends Themelet
     }
 
     /**
-     * @param string[] $search_terms
+     * @param search-term-array $search_terms
      */
     public function get_bulk_pool_input(array $search_terms): HTMLElement
     {
@@ -361,7 +361,7 @@ class PoolsTheme extends Themelet
                 "name" => "bulk_pool_new",
                 "placeholder" => "New Pool",
                 "required" => "",
-                "value" => Tag::implode($search_terms)
+                "value" => SearchTerm::implode($search_terms)
             ]
         );
     }

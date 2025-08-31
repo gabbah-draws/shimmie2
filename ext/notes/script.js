@@ -8,15 +8,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (noteImage.complete) {
             renderNotes();
         } else {
-            noteImage.addEventListener("load", () => {
-                renderNotes();
-            });
+            noteImage.addEventListener("load", renderNotes);
         }
 
-        let resizeObserver = new ResizeObserver((entries) => {
-            renderNotes();
-        });
+        let resizeObserver = new ResizeObserver(renderNotes);
         resizeObserver.observe(noteImage);
+
+        noteImage.parentNode.addEventListener("scroll", renderNotes);
     }
 });
 
@@ -28,13 +26,13 @@ function renderNotes() {
 
     // check the image we're adding notes on top of
     let br = noteImage.getBoundingClientRect();
-    let scale = br.width / noteImage.getAttribute("data-width");
+    let scale = br.width / noteImage.dataset.width;
 
     // render a container full of notes
     notesContainer = document.createElement("div");
     notesContainer.className = "notes-container";
-    notesContainer.style.left = window.scrollX + br.left + "px";
-    notesContainer.style.top = window.scrollY + br.top + "px";
+    notesContainer.style.top = br.top + "px";
+    notesContainer.style.left = br.left + "px";
     notesContainer.style.width = br.width + "px";
     notesContainer.style.height = br.height + "px";
 
@@ -77,7 +75,7 @@ function renderNotes() {
 function renderEditor(noteDiv, note) {
     // check the image we're adding notes on top of
     let br = noteImage.getBoundingClientRect();
-    let scale = br.width / noteImage.getAttribute("data-width");
+    let scale = br.width / noteImage.dataset.width;
 
     // set the note itself into drag & resize mode
     // NOTE: to avoid re-rendering the whole DOM every time the mouse
@@ -96,6 +94,7 @@ function renderEditor(noteDiv, note) {
             ),
         };
         noteDiv.classList.add("dragging");
+        notesContainer.classList.add("dragging");
     });
     noteDiv.addEventListener("mousemove", (e) => {
         if (dragStart) {
@@ -141,6 +140,7 @@ function renderEditor(noteDiv, note) {
     });
     function _commit() {
         noteDiv.classList.remove("dragging");
+        notesContainer.classList.remove("dragging");
         dragStart = null;
         note.x1 = Math.round(noteDiv.offsetLeft / scale);
         note.y1 = Math.round(noteDiv.offsetTop / scale);
@@ -261,10 +261,10 @@ function addNewNote() {
         return;
     }
     window.notes.push({
-        x1: 10,
-        y1: 10,
-        width: 100,
-        height: 40,
+        x1: noteImage.dataset.width * 0.1,
+        y1: noteImage.dataset.height * 0.1,
+        width: noteImage.dataset.width * 0.2,
+        height: noteImage.dataset.height * 0.1,
         note: "new note",
         note_id: null,
         image_id: window.notes_image_id,

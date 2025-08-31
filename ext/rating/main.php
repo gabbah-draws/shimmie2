@@ -59,13 +59,11 @@ final class RatingSetEvent extends Event
     }
 }
 
+/** @extends Extension<RatingsTheme> */
 final class Ratings extends Extension
 {
     public const KEY = "rating";
     public const VERSION_KEY = "ext_ratings2_version";
-
-    /** @var RatingsTheme */
-    protected Themelet $theme;
 
     public const UNRATED_KEYWORDS = ["unknown", "unrated"];
 
@@ -78,7 +76,7 @@ final class Ratings extends Extension
         foreach (ImageRating::$known_ratings as $key => $rating) {
             $search_terms[] = $rating->search_term;
         }
-        $this->search_regexp = "/^rating[=|:](?:(\*|[" . $codes . "]+)|(" .
+        $this->search_regexp = "/^rating[=:](?:(\*|[" . $codes . "]+)|(" .
             implode("|", $search_terms) . "|".implode("|", self::UNRATED_KEYWORDS)."))$/iD";
 
         Image::$prop_types["rating"] = ImagePropType::STRING;
@@ -277,15 +275,20 @@ final class Ratings extends Extension
 
     public function onBulkActionBlockBuilding(BulkActionBlockBuildingEvent $event): void
     {
-        if (Ctx::$user->can(RatingsPermission::BULK_EDIT_IMAGE_RATING)) {
-            $event->add_action("bulk_rate", "Set (R)ating", "r", "", $this->theme->get_selection_rater_html(selected_options: ["?"]));
-        }
+        $event->add_action(
+            "rate",
+            "Set (R)ating",
+            "r",
+            "",
+            $this->theme->get_selection_rater_html(selected_options: ["?"]),
+            permission: RatingsPermission::BULK_EDIT_IMAGE_RATING
+        );
     }
 
     public function onBulkAction(BulkActionEvent $event): void
     {
         switch ($event->action) {
-            case "bulk_rate":
+            case "rate":
                 if (!isset($event->params['rating'])) {
                     return;
                 }
@@ -307,7 +310,7 @@ final class Ratings extends Extension
         if ($event->page_matches("admin/bulk_rate", method: "POST", permission: RatingsPermission::BULK_EDIT_IMAGE_RATING)) {
             $n = 0;
             while (true) {
-                $images = Search::find_images($n, 100, Tag::explode($event->POST->req("query")));
+                $images = Search::find_images($n, 100, SearchTerm::explode($event->POST->req("query")));
                 if (count($images) === 0) {
                     break;
                 }
@@ -425,7 +428,7 @@ final class Ratings extends Extension
     private function no_rating_query(array $context): bool
     {
         foreach ($context as $term) {
-            if (\Safe\preg_match("/^rating[=|:]/", $term)) {
+            if (\Safe\preg_match("/^rating[=:]/", $term)) {
                 return false;
             }
         }

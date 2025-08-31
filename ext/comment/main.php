@@ -118,13 +118,11 @@ final class Comment
     }
 }
 
+/** @extends Extension<CommentListTheme> */
 final class CommentList extends Extension
 {
     public const KEY = "comment";
     public const VERSION_KEY = "ext_comments_version";
-
-    /** @var CommentListTheme $theme */
-    public Themelet $theme;
 
     public function onDatabaseUpgrade(DatabaseUpgradeEvent $event): void
     {
@@ -342,14 +340,14 @@ final class CommentList extends Extension
 
     public function onSearchTermParse(SearchTermParseEvent $event): void
     {
-        if ($matches = $event->matches("/^comments([:]?<|[:]?>|[:]?<=|[:]?>=|[:|=])(\d+)$/i")) {
+        if ($matches = $event->matches("/^comments(:|<=|<|=|>|>=)(\d+)$/i")) {
             $cmp = ltrim($matches[1], ":") ?: "=";
             $comments = $matches[2];
             $event->add_querylet(new Querylet("images.id IN (SELECT DISTINCT image_id FROM comments GROUP BY image_id HAVING count(image_id) $cmp $comments)"));
-        } elseif ($matches = $event->matches("/^commented_by[=|:](.*)$/i")) {
+        } elseif ($matches = $event->matches("/^commented_by[=:](.*)$/i")) {
             $user_id = User::name_to_id($matches[1]);
             $event->add_querylet(new Querylet("images.id IN (SELECT image_id FROM comments WHERE owner_id = $user_id)"));
-        } elseif ($matches = $event->matches("/^commented_by_userno[=|:]([0-9]+)$/i")) {
+        } elseif ($matches = $event->matches("/^commented_by_userno[=:]([0-9]+)$/i")) {
             $user_id = int_escape($matches[1]);
             $event->add_querylet(new Querylet("images.id IN (SELECT image_id FROM comments WHERE owner_id = $user_id)"));
         }
@@ -452,7 +450,7 @@ final class CommentList extends Extension
 			SELECT *
 			FROM comments
 			WHERE owner_ip = :remote_ip AND posted > now() - $window_sql
-		", ["remote_ip" => Network::get_real_ip()]);
+		", ["remote_ip" => (string)Network::get_real_ip()]);
 
         return (count($result) >= $max);
     }
@@ -461,12 +459,20 @@ final class CommentList extends Extension
      * get a hash which semi-uniquely identifies a submission form,
      * to stop spam bots which download the form once then submit
      * many times.
-     *
-     * FIXME: assumes comments are posted via HTTP...
      */
-    public static function get_hash(): string
+    public static function get_hash(int $offset = 0): string
     {
-        return md5(Network::get_real_ip() . date("%Y%m%d"));
+        return md5((string)Network::get_real_ip() . date("%Y%m%d%H", time() - $offset));
+    }
+
+    private static function check_hash(string $hash): bool
+    {
+        $valid_hashes = [
+            self::get_hash(0),
+            self::get_hash(3600),
+            self::get_hash(7200),
+        ];
+        return in_array($hash, $valid_hashes);
     }
 
     private function is_spam_akismet(string $text): bool
@@ -513,13 +519,10 @@ final class CommentList extends Extension
         }
 
         // all checks passed
-        if ($user->is_anonymous()) {
-            Ctx::$page->add_cookie("nocache", "Anonymous Commenter", time() + 60 * 60 * 24, "/");
-        }
         Ctx::$database->execute(
             "INSERT INTO comments(image_id, owner_id, owner_ip, posted, comment) ".
                 "VALUES(:image_id, :user_id, :remote_addr, now(), :comment)",
-            ["image_id" => $image_id, "user_id" => $user->id, "remote_addr" => Network::get_real_ip(), "comment" => $comment]
+            ["image_id" => $image_id, "user_id" => $user->id, "remote_addr" => (string)Network::get_real_ip(), "comment" => $comment]
         );
         $cid = Ctx::$database->get_last_insert_id('comments_id_seq');
         $snippet = substr($comment, 0, 100);
@@ -539,13 +542,9 @@ final class CommentList extends Extension
             throw new CommentPostingException("Comments need text...");
         } elseif (strlen($comment) > 9000) {
             throw new CommentPostingException("Comment too long~");
-        }
-
-        // advanced sanity checks
-        elseif (strlen($comment) / strlen(\Safe\gzcompress($comment)) > 10) {
+        } elseif (strlen($comment) / strlen(\Safe\gzcompress($comment)) > 10) {
             throw new CommentPostingException("Comment too repetitive~");
-        } elseif (Ctx::$user->is_anonymous() && ($_POST['hash'] !== self::get_hash())) {
-            Ctx::$page->add_cookie("nocache", "Anonymous Commenter", time() + 60 * 60 * 24, "/");
+        } elseif (!defined("UNITTEST") && !self::check_hash($_POST['hash'])) {
             throw new CommentPostingException(
                 "Comment submission form is out of date; refresh the ".
                     "comment form to show you aren't a spammer~"

@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Shimmie2;
 
+/** @extends Extension<RandomImageTheme> */
 final class RandomImage extends Extension
 {
     public const KEY = "random_image";
-    /** @var RandomImageTheme */
-    protected Themelet $theme;
 
     public function onPageRequest(PageRequestEvent $event): void
     {
@@ -17,7 +16,7 @@ final class RandomImage extends Extension
             || $event->page_matches("random_image/{action}/{search}")
         ) {
             $action = $event->get_arg('action');
-            $search_terms = Tag::explode($event->get_arg('search', ""), false);
+            $search_terms = SearchTerm::explode($event->get_arg('search', ""));
             $image = Image::by_random($search_terms);
             if (!$image) {
                 throw new PostNotFound("Couldn't find any posts randomly");

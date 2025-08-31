@@ -45,7 +45,7 @@ final readonly class Url
 
     public static function parse(string $url): Url
     {
-        $parsed = parse_url($url);
+        $parsed = \Safe\parse_url($url);
 
         $query_array = [];
         if (isset($parsed['query'])) {
@@ -101,6 +101,11 @@ final readonly class Url
             $dir = dirname($self);
             $dir = str_replace("\\", "/", $dir);
             $dir = rtrim($dir, "/");
+            // if the install directory has a space in the dirname, we need to
+            // encode that to match the URL encoding, so that
+            // "URL == basepath + path" - but we can't just rawurlencode it because
+            // that would encode the slashes too, see #1792
+            $dir = str_replace(" ", "%20", $dir);
         }
         if ($dir === "") {
             $dir = null;
@@ -140,6 +145,9 @@ final readonly class Url
         return $this->page;
     }
 
+    /**
+     * @return url-string
+     */
     public function getPath(): string
     {
         assert(is_null($this->path) || is_null($this->page));
@@ -174,6 +182,9 @@ final readonly class Url
         return $this->query;
     }
 
+    /**
+     * @return url-string
+     */
     public function __toString(): string
     {
         $scheme   = !is_null($this->scheme) ? $this->scheme . '://' : '';
@@ -263,6 +274,6 @@ final readonly class Url
 
     public static function are_niceurls_enabled(): bool
     {
-        return SysConfig::getNiceUrls() || Ctx::$config->get(SetupConfig::NICE_URLS);
+        return getenv("SHM_NICE_URLS") === "true" || Ctx::$config->get(SetupConfig::NICE_URLS);
     }
 }

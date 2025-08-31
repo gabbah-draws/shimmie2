@@ -43,8 +43,8 @@ class ViewPostTheme extends Themelet
 
         if (!$this->is_ordered_search()) {
             $query = $this->get_query();
-            $page->add_html_header(LINK(["id" => "nextlink", "rel" => "next", "href" => make_link("post/next/{$image->id}", $query)]));
-            $page->add_html_header(LINK(["id" => "prevlink", "rel" => "previous", "href" => make_link("post/prev/{$image->id}", $query)]));
+            $page->add_html_header(LINK(["class" => "nextlink", "rel" => "next", "href" => make_link("post/next/{$image->id}", $query)]));
+            $page->add_html_header(LINK(["class" => "prevlink", "rel" => "previous", "href" => make_link("post/prev/{$image->id}", $query)]));
         }
     }
 
@@ -75,9 +75,9 @@ class ViewPostTheme extends Themelet
     protected function is_ordered_search(): bool
     {
         if (isset($_GET['search'])) {
-            $tags = Tag::explode($_GET['search']);
-            foreach ($tags as $tag) {
-                if (\Safe\preg_match("/^order[=:]/", $tag) === 1) {
+            $terms = SearchTerm::explode($_GET['search']);
+            foreach ($terms as $term) {
+                if (\Safe\preg_match("/^order[=:]/", $term) === 1) {
                     return true;
                 }
             }
@@ -92,9 +92,9 @@ class ViewPostTheme extends Themelet
         } else {
             $query = $this->get_query();
             return joinHTML(" | ", [
-                A(["href" => make_link("post/prev/{$image->id}", $query), "id" => "prevlink"], "Prev"),
+                A(["href" => make_link("post/prev/{$image->id}", $query), "class" => "prevlink"], "Prev"),
                 A(["href" => make_link()], "Index"),
-                A(["href" => make_link("post/next/{$image->id}", $query), "id" => "nextlink"], "Next"),
+                A(["href" => make_link("post/next/{$image->id}", $query), "class" => "nextlink"], "Next"),
             ]);
         }
     }

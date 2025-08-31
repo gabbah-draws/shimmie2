@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Shimmie2;
 
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\{InputArgument, InputInterface};
+use Symfony\Component\Console\Output\OutputInterface;
+
 /**
  * Occurs when some data is being uploaded.
  */
@@ -58,7 +62,7 @@ final class DirectoryUploadEvent extends Event
     public array $results = [];
 
     /**
-     * @param string[] $extra_tags
+     * @param tag-array $extra_tags
      */
     public function __construct(
         public Path $base,
@@ -104,12 +108,12 @@ final class UploadSuccess extends UploadResult
  * Main upload class.
  * All files that are uploaded to the site are handled through this class.
  * This also includes transloaded files as well.
+ *
+ * @extends Extension<UploadTheme>
  */
 final class Upload extends Extension
 {
     public const KEY = "upload";
-    /** @var UploadTheme */
-    protected Themelet $theme;
     public bool $is_full;
 
     /**
@@ -193,6 +197,36 @@ final class Upload extends Extension
         }
 
         $event->results = array_merge($event->results, $results);
+    }
+
+    public function onCliGen(CliGenEvent $event): void
+    {
+        $event->app->register('post:upload')
+            ->setDescription("Upload a file from disk")
+            ->addArgument('file', InputArgument::REQUIRED, 'The file to upload')
+            ->addArgument('metadata', InputArgument::OPTIONAL, 'Key-value pairs for metadata', 'tags=test')
+            ->setCode(function (InputInterface $input, OutputInterface $output): int {
+                if (!Ctx::$user->can(ImagePermission::CREATE_IMAGE)) {
+                    $output->writeln("<error>Permission denied</error>");
+                    return Command::FAILURE;
+                }
+                $file_path = new Path($input->getArgument('file'));
+                if (!$file_path->is_readable()) {
+                    $output->writeln("<error>File not found: {$file_path->str()}</error>");
+                    return Command::FAILURE;
+                }
+                $arr = [];
+                parse_str((string)$input->getArgument('metadata'), $arr);
+                /** @var array<string,string> $arr */
+                $metadata = new QueryArray($arr);
+                $event = send_event(new DataUploadEvent($file_path, $file_path->basename()->str(), 0, $metadata));
+                $images = $event->images;
+                if (count($images) === 0) {
+                    $output->writeln("<error>No crash, but no posts uploaded</error>");
+                    return Command::FAILURE;
+                }
+                return Command::SUCCESS;
+            });
     }
 
     public function onPageRequest(PageRequestEvent $event): void

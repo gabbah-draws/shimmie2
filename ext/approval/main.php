@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Shimmie2;
 
+/** @extends Extension<ApprovalTheme> */
 final class Approval extends Extension
 {
     public const KEY = "approval";
-
-    /** @var ApprovalTheme */
-    protected Themelet $theme;
 
     public function onInitExt(InitExtEvent $event): void
     {
@@ -84,7 +82,7 @@ final class Approval extends Extension
     {
         if ($event->parent === "posts") {
             if (Ctx::$user->can(ApprovalPermission::APPROVE_IMAGE)) {
-                $event->add_nav_link(search_link(['approved:no']), "Pending Approval", order: 60);
+                $event->add_nav_link(search_link(['approved=no']), "Pending Approval", order: 60);
             }
         }
     }
@@ -92,11 +90,11 @@ final class Approval extends Extension
     public function onUserBlockBuilding(UserBlockBuildingEvent $event): void
     {
         if (Ctx::$user->can(ApprovalPermission::APPROVE_IMAGE)) {
-            $event->add_link("Pending Approval", search_link(["approved:no"]), 60);
+            $event->add_link("Pending Approval", search_link(["approved=no"]), 60);
         }
     }
 
-    public const SEARCH_REGEXP = "/^approved:(yes|no)/i";
+    public const SEARCH_REGEXP = "/^approved[=:](yes|no)/i";
     public function onSearchTermParse(SearchTermParseEvent $event): void
     {
         if (is_null($event->term) && $this->no_approval_query($event->context) && !defined("UNITTEST")) {
@@ -187,19 +185,17 @@ final class Approval extends Extension
 
     public function onBulkActionBlockBuilding(BulkActionBlockBuildingEvent $event): void
     {
-        if (Ctx::$user->can(ApprovalPermission::APPROVE_IMAGE)) {
-            if (in_array("approved:no", $event->search_terms)) {
-                $event->add_action("bulk_approve_image", "Approve", "a");
-            } else {
-                $event->add_action("bulk_disapprove_image", "Disapprove");
-            }
+        if (in_array("approved:no", $event->search_terms)) {
+            $event->add_action("approve-post", "Approve", "a", permission: ApprovalPermission::APPROVE_IMAGE);
+        } else {
+            $event->add_action("disapprove-post", "Disapprove", permission: ApprovalPermission::APPROVE_IMAGE);
         }
     }
 
     public function onBulkAction(BulkActionEvent $event): void
     {
         switch ($event->action) {
-            case "bulk_approve_image":
+            case "approve-post":
                 if (Ctx::$user->can(ApprovalPermission::APPROVE_IMAGE)) {
                     $total = 0;
                     foreach ($event->items as $image) {
@@ -209,7 +205,7 @@ final class Approval extends Extension
                     $event->log_action("Approved $total items");
                 }
                 break;
-            case "bulk_disapprove_image":
+            case "disapprove-post":
                 if (Ctx::$user->can(ApprovalPermission::APPROVE_IMAGE)) {
                     $total = 0;
                     foreach ($event->items as $image) {

@@ -99,11 +99,10 @@ final class WikiPage
     }
 }
 
+/** @extends Extension<WikiTheme> */
 final class Wiki extends Extension
 {
     public const KEY = "wiki";
-    /** @var WikiTheme */
-    protected Themelet $theme;
 
     public function onDatabaseUpgrade(DatabaseUpgradeEvent $event): void
     {
@@ -237,7 +236,7 @@ final class Wiki extends Extension
                     "
                         INSERT INTO wiki_pages(owner_id, owner_ip, date, title, revision, locked, body)
                         VALUES (:owner_id, :owner_ip, now(), :title, :revision, :locked, :body)",
-                    ["owner_id" => $event->user->id, "owner_ip" => Network::get_real_ip(),
+                    ["owner_id" => $event->user->id, "owner_ip" => (string)Network::get_real_ip(),
                     "title" => $wpage->title, "revision" => $wpage->revision, "locked" => $wpage->locked, "body" => $wpage->body]
                 );
             } else {
@@ -245,7 +244,7 @@ final class Wiki extends Extension
                     "
                         UPDATE wiki_pages SET owner_id=:owner_id, owner_ip=:owner_ip, date=now(), locked=:locked, body=:body
                         WHERE title = :title ORDER BY revision DESC LIMIT 1",
-                    ["owner_id" => $event->user->id, "owner_ip" => Network::get_real_ip(),
+                    ["owner_id" => $event->user->id, "owner_ip" => (string)Network::get_real_ip(),
                     "title" => $wpage->title, "locked" => $wpage->locked, "body" => $wpage->body]
                 );
             }
@@ -304,7 +303,7 @@ final class Wiki extends Extension
             "
 				SELECT revision, date
 				FROM wiki_pages
-				WHERE LOWER(title) LIKE LOWER(:title)
+				WHERE SCORE_ILIKE(title, :title)
 				ORDER BY revision DESC
 			",
             ["title" => $title]
@@ -319,7 +318,7 @@ final class Wiki extends Extension
             "
 				SELECT *
 				FROM wiki_pages
-				WHERE LOWER(title) LIKE LOWER(:title)
+				WHERE SCORE_ILIKE(title, :title)
 				AND (:revision = -1 OR revision = :revision)
 				ORDER BY revision DESC
 			",
@@ -331,7 +330,7 @@ final class Wiki extends Extension
             $row = Ctx::$database->get_row("
                 SELECT *
                 FROM wiki_pages
-                WHERE title LIKE :title
+                WHERE title = :title
                 ORDER BY revision DESC
 			", ["title" => "wiki:default"]);
 

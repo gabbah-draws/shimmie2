@@ -9,11 +9,10 @@ require_once "events/image_info_box_building_event.php";
 require_once "events/image_info_set_event.php";
 require_once "events/image_admin_block_building_event.php";
 
+/** @extends Extension<ViewPostTheme> */
 final class ViewPost extends Extension
 {
     public const KEY = "view";
-    /** @var ViewPostTheme */
-    protected Themelet $theme;
 
     public function onPageRequest(PageRequestEvent $event): void
     {
@@ -22,7 +21,7 @@ final class ViewPost extends Extension
 
             $search = $event->GET->get('search');
             if ($search) {
-                $search_terms = Tag::explode($search);
+                $search_terms = SearchTerm::explode($search);
                 $fragment = "search=".url_escape($search);
             } else {
                 $search_terms = [];

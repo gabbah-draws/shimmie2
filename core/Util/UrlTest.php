@@ -63,6 +63,7 @@ final class UrlTest extends TestCase
         // relative to the document root"
         self::assertUrlEquals("", Url::base(["PHP_SELF" => "/index.php"]));
         self::assertUrlEquals("/mydir", Url::base(["PHP_SELF" => "/mydir/index.php"]));
+        self::assertUrlEquals("/my%20dir", Url::base(["PHP_SELF" => "/my dir/index.php"]));
 
         // SCRIPT_FILENAME should point to "the absolute pathname of
         // the currently executing script" and DOCUMENT_ROOT should
@@ -93,7 +94,7 @@ final class UrlTest extends TestCase
     /**
      * An integration test for
      * - search_link()
-     *   - make_link_str()
+     *   - make_link()
      * - _get_query()
      * - get_search_terms()
      */
@@ -102,13 +103,14 @@ final class UrlTest extends TestCase
     public function test_get_search_terms_from_search_link(bool $nice_urls): void
     {
         /**
-         * @param array<string> $vars
-         * @return array<string>
+         * @param search-term-array $terms
+         * @return search-term-array
          */
         $gst = function (array $terms): array {
+            /** @var search-term-array $terms */
             $pre = new PageRequestEvent("GET", _get_query((string)search_link($terms)), new QueryArray([]), new QueryArray([]));
             $pre->page_matches("post/list/{search}/{page}");
-            return Tag::explode($pre->get_arg('search'));
+            return SearchTerm::explode($pre->get_arg('search'));
         };
 
         Ctx::$config->set(SetupConfig::NICE_URLS, $nice_urls);

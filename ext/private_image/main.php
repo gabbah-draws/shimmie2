@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Shimmie2;
 
+/** @extends Extension<PrivateImageTheme> */
 final class PrivateImage extends Extension
 {
     public const KEY = "private_image";
-    /** @var PrivateImageTheme */
-    protected Themelet $theme;
 
     public function onInitExt(InitExtEvent $event): void
     {
@@ -65,7 +64,7 @@ final class PrivateImage extends Extension
         }
     }
 
-    public const SEARCH_REGEXP = "/^private:(yes|no|any)/i";
+    public const SEARCH_REGEXP = "/^private[=:](yes|no|any)/i";
     public function onSearchTermParse(SearchTermParseEvent $event): void
     {
         $show_private = Ctx::$user->get_config()->get(PrivateImageUserConfig::VIEW_DEFAULT);
@@ -174,16 +173,14 @@ final class PrivateImage extends Extension
 
     public function onBulkActionBlockBuilding(BulkActionBlockBuildingEvent $event): void
     {
-        if (Ctx::$user->can(PrivateImagePermission::SET_PRIVATE_IMAGE)) {
-            $event->add_action("bulk_privatize_image", "Make Private");
-            $event->add_action("bulk_publicize_image", "Make Public");
-        }
+        $event->add_action("privatize-post", "Make Private", permission: PrivateImagePermission::SET_PRIVATE_IMAGE);
+        $event->add_action("publicize-post", "Make Public", permission: PrivateImagePermission::SET_PRIVATE_IMAGE);
     }
 
     public function onBulkAction(BulkActionEvent $event): void
     {
         switch ($event->action) {
-            case "bulk_privatize_image":
+            case "privatize-post":
                 if (Ctx::$user->can(PrivateImagePermission::SET_PRIVATE_IMAGE)) {
                     $total = 0;
                     foreach ($event->items as $image) {
@@ -198,7 +195,7 @@ final class PrivateImage extends Extension
                     $event->log_action("Made $total items private");
                 }
                 break;
-            case "bulk_publicize_image":
+            case "publicize-post":
                 $total = 0;
                 foreach ($event->items as $image) {
                     if (

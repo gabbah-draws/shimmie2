@@ -14,39 +14,22 @@ COPY --from=mwader/static-ffmpeg:7.1 /ffmpeg /ffprobe /usr/local/bin/
 RUN apt update && \
     apt upgrade -y && \
     apt install -y curl && \
-    curl --output /usr/share/keyrings/nginx-keyring.gpg https://unit.nginx.org/keys/nginx-keyring.gpg && \
-    echo 'deb [signed-by=/usr/share/keyrings/nginx-keyring.gpg] https://packages.nginx.org/unit/debian/ bookworm unit' > /etc/apt/sources.list.d/unit.list && \
     apt update && apt install -y --no-install-recommends \
-    php${PHP_VERSION}-cli libphp${PHP_VERSION}-embed \
+    supervisor \
+    nginx \
+    php${PHP_VERSION}-cli php${PHP_VERSION}-fpm \
     php${PHP_VERSION}-gd php${PHP_VERSION}-zip php${PHP_VERSION}-xml php${PHP_VERSION}-mbstring php${PHP_VERSION}-curl \
     php${PHP_VERSION}-pgsql php${PHP_VERSION}-mysql php${PHP_VERSION}-sqlite3 \
     php${PHP_VERSION}-memcached \
-    curl imagemagick zip unzip && \
+    curl imagemagick zip unzip librsvg2-bin git && \
     rm -rf /var/lib/apt/lists/*
-
-# copy individual files from unit:php rather than inheriting
-# `FROM unit:php` because we don't want to inherit EXPOSE settings
-COPY --from=unit:php8.4 /var/lib/unit /var/lib/unit/
-COPY --from=unit:php8.4 /usr/lib/unit /usr/lib/unit/
-COPY --from=unit:php8.4 /usr/sbin/unitd /usr/sbin/unitd
-RUN true \
-    && groupadd --gid 999 unit \
-    && useradd \
-    --uid 999 \
-    --gid unit \
-    --no-create-home \
-    --home /nonexistent \
-    --comment "unit user" \
-    --shell /bin/false \
-    unit \
-    && ln -sf /dev/stderr /var/log/unit.log
 
 # Install dev packages
 # Things which are only needed during development - Composer has 100MB of
 # dependencies, so let's avoid including that in the final image
 FROM base AS dev-tools
 RUN apt update && apt upgrade -y && \
-    apt install -y composer php${PHP_VERSION}-xdebug git procps net-tools vim && \
+    apt install -y composer php${PHP_VERSION}-xdebug procps net-tools vim && \
     rm -rf /var/lib/apt/lists/*
 ENV XDEBUG_MODE=coverage
 
@@ -69,12 +52,14 @@ EXPOSE 8000
 FROM base AS run
 EXPOSE 8000
 # HEALTHCHECK --interval=1m --timeout=3s CMD curl --fail http://127.0.0.1:8000/ || exit 1
-ARG BUILD_TIME=unknown BUILD_HASH=unknown
-ENV UID=1000 GID=1000
+ARG BUILD_TIME=unknown
+ARG BUILD_HASH=unknown
+ENV UID=1000
+ENV GID=1000
+ENV SHM_NICE_URLS=true
 COPY --from=build /app /app
 WORKDIR /app
 RUN echo "define('BUILD_TIME', '$BUILD_TIME');" >> core/Config/SysConfig.php && \
-    echo "define('BUILD_HASH', '$BUILD_HASH');" >> core/Config/SysConfig.php && \
-    echo "define('NICE_URLS', true);" >> core/Config/SysConfig.php
+    echo "define('BUILD_HASH', '$BUILD_HASH');" >> core/Config/SysConfig.php
 ENTRYPOINT ["/app/.docker/entrypoint.sh"]
 CMD ["php", "/app/.docker/run.php"]

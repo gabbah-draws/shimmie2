@@ -9,7 +9,6 @@ final class BulkImportExport extends DataHandlerExtension
     public const KEY = "bulk_import_export";
     public const SUPPORTED_MIME = [MimeType::ZIP];
 
-    public const EXPORT_ACTION_NAME = "bulk_export";
     public const EXPORT_INFO_FILE_NAME = "export.json";
 
     public function onDataUpload(DataUploadEvent $event): void
@@ -92,15 +91,14 @@ final class BulkImportExport extends DataHandlerExtension
 
     public function onBulkActionBlockBuilding(BulkActionBlockBuildingEvent $event): void
     {
-        if (Ctx::$user->can(BulkImportExportPermission::BULK_EXPORT)) {
-            $event->add_action(self::EXPORT_ACTION_NAME, "Export");
-        }
+        $event->add_action("export", "Export", permission: BulkImportExportPermission::BULK_EXPORT);
     }
 
     public function onBulkAction(BulkActionEvent $event): void
     {
-        if (Ctx::$user->can(BulkImportExportPermission::BULK_EXPORT) &&
-            ($event->action === self::EXPORT_ACTION_NAME)) {
+        if (Ctx::$user->can(BulkImportExportPermission::BULK_EXPORT)
+            && ($event->action === "export")
+        ) {
             $zip_filename = shm_tempnam("bulk_export");
             $zip = new \ZipArchive();
 
@@ -125,8 +123,7 @@ final class BulkImportExport extends DataHandlerExtension
 
                 $zip->close();
 
-                Ctx::$page->set_file(MimeType::ZIP, $zip_filename, true);
-                Ctx::$page->set_filename(Ctx::$user->name . '-' . date('YmdHis') . '.zip');
+                Ctx::$page->set_file(MimeType::ZIP, $zip_filename, true, filename: Ctx::$user->name . '-' . date('YmdHis') . '.zip');
 
                 $event->redirect = false;
             }
@@ -134,8 +131,9 @@ final class BulkImportExport extends DataHandlerExtension
     }
 
     // we don't actually do anything, just accept one upload and spawn several
-    protected function media_check_properties(MediaCheckPropertiesEvent $event): void
+    protected function media_check_properties(Image $image): ?MediaProperties
     {
+        return null;
     }
 
     protected function check_contents(Path $tmpname): bool

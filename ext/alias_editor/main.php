@@ -52,11 +52,10 @@ final class AddAliasException extends UserError
 {
 }
 
+/** @extends Extension<AliasEditorTheme> */
 final class AliasEditor extends Extension
 {
     public const KEY = "alias_editor";
-    /** @var AliasEditorTheme */
-    protected Themelet $theme;
 
     public function onPageRequest(PageRequestEvent $event): void
     {
@@ -64,13 +63,11 @@ final class AliasEditor extends Extension
         $page = Ctx::$page;
 
         if ($event->page_matches("alias/add", method: "POST", permission: AliasEditorPermission::MANAGE_ALIAS_LIST)) {
-            $input = validate_input(["c_oldtag" => "string", "c_newtag" => "string"]);
-            send_event(new AddAliasEvent($input['c_oldtag'], $input['c_newtag']));
+            send_event(new AddAliasEvent($event->POST->req('c_oldtag'), $event->POST->req('c_newtag')));
             $page->set_redirect(make_link("alias/list"));
         }
         if ($event->page_matches("alias/remove", method: "POST", permission: AliasEditorPermission::MANAGE_ALIAS_LIST)) {
-            $input = validate_input(["d_oldtag" => "string"]);
-            send_event(new DeleteAliasEvent($input['d_oldtag']));
+            send_event(new DeleteAliasEvent($event->POST->req('d_oldtag')));
             $page->set_redirect(make_link("alias/list"));
         }
         if ($event->page_matches("alias/list")) {
@@ -85,8 +82,7 @@ final class AliasEditor extends Extension
             $this->theme->display_aliases($t->table($t->query()), $t->paginator());
         }
         if ($event->page_matches("alias/export/aliases.csv")) {
-            $page->set_filename("aliases.csv");
-            $page->set_data(MimeType::CSV, $this->get_alias_csv($database));
+            $page->set_data(MimeType::CSV, $this->get_alias_csv($database), filename: "aliases.csv");
         }
         if ($event->page_matches("alias/import", method: "POST", permission: AliasEditorPermission::MANAGE_ALIAS_LIST)) {
             if (count($_FILES) > 0) {

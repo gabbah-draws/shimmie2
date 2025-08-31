@@ -27,11 +27,10 @@ final class AdminActionEvent extends Event
     }
 }
 
+/** @extends Extension<AdminPageTheme> */
 final class AdminPage extends Extension
 {
     public const KEY = "admin";
-    /** @var AdminPageTheme */
-    protected Themelet $theme;
 
     public function onPageRequest(PageRequestEvent $event): void
     {
@@ -114,7 +113,7 @@ final class AdminPage extends Extension
                 Ctx::$cache->set($key, $value, 60);
                 return Command::SUCCESS;
             });
-        $event->app->register('cache:del')
+        $event->app->register('cache:delete')
             ->addArgument('key', InputArgument::REQUIRED)
             ->setDescription("Delete a cache value")
             ->setCode(function (InputInterface $input, OutputInterface $output): int {

@@ -8,11 +8,10 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\{InputArgument, InputInterface};
 use Symfony\Component\Console\Output\OutputInterface;
 
+/** @extends Extension<RegenThumbTheme> */
 final class RegenThumb extends Extension
 {
     public const KEY = "regen_thumb";
-    /** @var RegenThumbTheme */
-    protected Themelet $theme;
 
     public function regenerate_thumbnail(Image $image, bool $force = true): bool
     {
@@ -31,8 +30,8 @@ final class RegenThumb extends Extension
             $this->theme->display_results($image);
         }
         if ($event->page_matches("regen_thumb/mass", method: "POST", permission: ImagePermission::DELETE_IMAGE)) {
-            $tags = Tag::explode(strtolower($event->POST->req('tags')), false);
-            $images = Search::find_images(limit: 10000, tags: $tags);
+            $tags = SearchTerm::explode(strtolower($event->POST->req('tags')));
+            $images = Search::find_images(limit: 10000, terms: $tags);
 
             foreach ($images as $image) {
                 $this->regenerate_thumbnail($image);
@@ -51,15 +50,13 @@ final class RegenThumb extends Extension
 
     public function onBulkActionBlockBuilding(BulkActionBlockBuildingEvent $event): void
     {
-        if (Ctx::$user->can(ImagePermission::DELETE_IMAGE)) {
-            $event->add_action("bulk_regen", "Regen Thumbnails", block: $this->theme->bulk_html());
-        }
+        $event->add_action("regen-thumb", "Regen Thumbnails", block: $this->theme->bulk_html(), permission: ImagePermission::DELETE_IMAGE);
     }
 
     public function onBulkAction(BulkActionEvent $event): void
     {
         switch ($event->action) {
-            case "bulk_regen":
+            case "regen-thumb":
                 if (Ctx::$user->can(ImagePermission::DELETE_IMAGE)) {
                     $force = true;
                     if (isset($event->params["bulk_regen_thumb_missing_only"])
@@ -102,7 +99,7 @@ final class RegenThumb extends Extension
                 if (isset($event->params["regen_thumb_mime"])) {
                     $mime = $event->params["regen_thumb_mime"];
                 }
-                $images = Search::find_images(tags: ["mime=" . $mime]);
+                $images = Search::find_images(terms: ["mime=" . $mime]);
 
                 $i = 0;
                 foreach ($images as $image) {
@@ -127,7 +124,7 @@ final class RegenThumb extends Extension
 
     public function onCliGen(CliGenEvent $event): void
     {
-        $event->app->register('regen-thumb')
+        $event->app->register('post:regen-thumb')
             ->addArgument('id_or_hash', InputArgument::REQUIRED)
             ->setDescription("Regenerate a post's thumbnail")
             ->setCode(function (InputInterface $input, OutputInterface $output): int {

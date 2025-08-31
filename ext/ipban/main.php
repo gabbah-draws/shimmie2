@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Shimmie2;
 
-use MicroCRUD\{ActionColumn, DateColumn, EnumColumn, InetColumn, StringColumn, Table};
+use MicroCRUD\{ActionColumn, DateColumn, EnumColumn, InetColumn, SelectColumn, StringColumn, Table};
 
 final class IPBanTable extends Table
 {
@@ -21,6 +21,7 @@ final class IPBanTable extends Table
         $this->size = 100;
         $this->limit = 1000000;
         $this->set_columns([
+            new SelectColumn("id"),
             new InetColumn("ip", "IP"),
             new EnumColumn("mode", "Mode", [
                 "Block" => "block",
@@ -39,6 +40,7 @@ final class IPBanTable extends Table
             "all" => ["((expires > CURRENT_TIMESTAMP) OR (expires IS NULL))", null],
         ];
         $this->create_url = make_link("ip_ban/create");
+        $this->bulk_url = make_link("ip_ban/bulk");
         $this->delete_url = make_link("ip_ban/delete");
         $this->table_attrs = ["class" => "zebra form"];
     }
@@ -56,22 +58,20 @@ final class RemoveIPBanEvent extends Event
 final class AddIPBanEvent extends Event
 {
     public function __construct(
-        public string $ip,
+        public IPAddress $ip,
         public string $mode,
         public string $reason,
         public ?string $expires
     ) {
         parent::__construct();
-        $this->ip = trim($ip);
         $this->reason = trim($reason);
     }
 }
 
+/** @extends Extension<IPBanTheme> */
 final class IPBan extends Extension
 {
     public const KEY = "ipban";
-    /** @var IPBanTheme */
-    protected Themelet $theme;
 
     public function get_priority(): int
     {
@@ -148,12 +148,10 @@ final class IPBan extends Extension
 
             if ($row["mode"] === "ghost") {
                 Ctx::$page->add_block(new Block(null, \MicroHTML\rawHTML($msg), "main", 0, is_content: false));
-                Ctx::$page->add_cookie("nocache", "Ghost Banned", time() + 60 * 60 * 2, "/");
                 $event->user->class = UserClass::$known_classes["ghost"];
             } elseif ($row["mode"] === "anon-ghost") {
                 if ($event->user->is_anonymous()) {
                     Ctx::$page->add_block(new Block(null, \MicroHTML\rawHTML($msg), "main", 0, is_content: false));
-                    Ctx::$page->add_cookie("nocache", "Ghost Banned", time() + 60 * 60 * 2, "/");
                     $event->user->class = UserClass::$known_classes["ghost"];
                 }
             } else {
@@ -168,16 +166,37 @@ final class IPBan extends Extension
     {
         $page = Ctx::$page;
         if ($event->page_matches("ip_ban/create", method: "POST", permission: IPBanPermission::BAN_IP)) {
-            $input = validate_input(["c_ip" => "string", "c_mode" => "string", "c_reason" => "string", "c_expires" => "optional,date"]);
-            send_event(new AddIPBanEvent($input['c_ip'], $input['c_mode'], $input['c_reason'], $input['c_expires']));
-            $page->flash("Ban for {$input['c_ip']} added");
+            $c_ip = $event->POST->req("c_ip");
+            $c_mode = $event->POST->req("c_mode");
+            $c_reason = $event->POST->req("c_reason");
+            $c_expires = nullify($event->POST->get("c_expires"));
+            if ($c_expires !== null) {
+                $c_expires = date("Y-m-d H:i:s", \Safe\strtotime(trim($c_expires)));
+            }
+            send_event(new AddIPBanEvent(
+                IPAddress::parse($c_ip),
+                $c_mode,
+                $c_reason,
+                $c_expires
+            ));
+            $page->flash("Ban for {$c_ip} added");
             $page->set_redirect(make_link("ip_ban/list"));
         }
         if ($event->page_matches("ip_ban/delete", method: "POST", permission: IPBanPermission::BAN_IP)) {
-            $input = validate_input(["d_id" => "int"]);
-            send_event(new RemoveIPBanEvent($input['d_id']));
+            send_event(new RemoveIPBanEvent(int_escape($event->POST->req('d_id'))));
             $page->flash("Ban removed");
             $page->set_redirect(make_link("ip_ban/list"));
+        }
+        if ($event->page_matches("ip_ban/bulk", method: "POST", permission: IPBanPermission::BAN_IP)) {
+            $action = $event->POST->req("bulk_action");
+            if ($action === "delete") {
+                $ids = $event->POST->getAll("id");
+                foreach ($ids as $id) {
+                    send_event(new RemoveIPBanEvent(int_escape($id)));
+                }
+                $page->flash(count($ids) . " bans removed");
+            }
+            $page->set_redirect(Url::referer_or());
         }
         if ($event->page_matches("ip_ban/list", method: "GET", permission: IPBanPermission::BAN_IP)) {
             $event->GET['c_banner'] = Ctx::$user->name;
@@ -209,7 +228,7 @@ final class IPBan extends Extension
     {
         Ctx::$database->execute(
             "INSERT INTO bans (ip, mode, reason, expires, banner_id) VALUES (:ip, :mode, :reason, :expires, :admin_id)",
-            ["ip" => $event->ip, "mode" => $event->mode, "reason" => $event->reason, "expires" => $event->expires, "admin_id" => Ctx::$user->id]
+            ["ip" => (string)$event->ip, "mode" => $event->mode, "reason" => $event->reason, "expires" => $event->expires, "admin_id" => Ctx::$user->id]
         );
         Ctx::$cache->delete("ip_bans");
         Ctx::$cache->delete("network_bans");
@@ -306,8 +325,7 @@ final class IPBan extends Extension
         }
 
         if ($this->get_version() === 7) {
-            // @phpstan-ignore-next-line
-            Ctx::$database->execute($database->scoreql_to_sql("ALTER TABLE bans CHANGE ip ip SCORE_INET"));
+            Ctx::$database->execute("ALTER TABLE bans CHANGE ip ip SCORE_INET");
             $database->execute("ALTER TABLE bans ADD COLUMN added TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP");
             $this->set_version(8);
         }
@@ -330,14 +348,15 @@ final class IPBan extends Extension
      * @param array<string,int> $ips
      * @param array<string,int> $networks
      */
-    public function find_active_ban(string $remote, array $ips, array $networks): ?int
+    public function find_active_ban(IPAddress $remote, array $ips, array $networks): ?int
     {
         $active_ban_id = null;
-        if (isset($ips[$remote])) {
-            $active_ban_id = $ips[$remote];
+        $str = (string) $remote;
+        if (isset($ips[$str])) {
+            $active_ban_id = $ips[$str];
         } else {
             foreach ($networks as $range => $ban_id) {
-                if (Network::ip_in_range($remote, $range)) {
+                if (IPRange::parse($range)->contains($remote)) {
                     $active_ban_id = $ban_id;
                 }
             }

@@ -6,29 +6,11 @@ namespace Shimmie2;
 
 use enshrined\svgSanitize\Sanitizer;
 
+/** @extends DataHandlerExtension<SVGFileHandlerTheme> */
 final class SVGFileHandler extends DataHandlerExtension
 {
     public const KEY = "handle_svg";
     public const SUPPORTED_MIME = [MimeType::SVG];
-
-    /** @var SVGFileHandlerTheme */
-    protected Themelet $theme;
-
-    public function onPageRequest(PageRequestEvent $event): void
-    {
-        if ($event->page_matches("get_svg/{id}")) {
-            $id = $event->get_iarg('id');
-            $image = Image::by_id_ex($id);
-            $hash = $image->hash;
-
-            $sanitizer = new Sanitizer();
-            $sanitizer->removeRemoteReferences(true);
-            $dirtySVG = Filesystem::warehouse_path(Image::IMAGE_DIR, $hash)->get_contents();
-            $cleanSVG = false_throws($sanitizer->sanitize($dirtySVG));
-
-            Ctx::$page->set_data(MimeType::SVG, $cleanSVG);
-        }
-    }
 
     public function onDataUpload(DataUploadEvent $event): void
     {
@@ -48,16 +30,19 @@ final class SVGFileHandler extends DataHandlerExtension
         }
     }
 
-    protected function media_check_properties(MediaCheckPropertiesEvent $event): void
+    protected function media_check_properties(Image $image): MediaProperties
     {
-        $event->image->lossless = true;
-        $event->image->video = false;
-        $event->image->audio = false;
-        $event->image->image = true;
-
-        $msp = new MiniSVGParser($event->image->get_image_filename()->str());
-        $event->image->width = $msp->width;
-        $event->image->height = $msp->height;
+        $msp = new MiniSVGParser($image->get_image_filename()->str());
+        return new MediaProperties(
+            width: $msp->width,
+            height: $msp->height,
+            lossless: true,
+            video: false,
+            audio: false,
+            image: true,
+            video_codec: null,
+            length: null,
+        );
     }
 
     protected function create_thumb(Image $image): bool

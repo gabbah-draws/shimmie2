@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Shimmie2;
 
+/** @extends Extension<MimeSystemTheme> */
 final class MimeSystem extends Extension
 {
     public const KEY = "mime";
-    /** @var MimeSystemTheme */
-    protected Themelet $theme;
 
     public function onParseLinkTemplate(ParseLinkTemplateEvent $event): void
     {
@@ -64,10 +63,10 @@ final class MimeSystem extends Extension
 
     public function onSearchTermParse(SearchTermParseEvent $event): void
     {
-        if ($matches = $event->matches("/^ext[=|:]([a-zA-Z0-9]+)$/i")) {
+        if ($matches = $event->matches("/^ext[=:]([a-zA-Z0-9]+)$/i")) {
             $ext = strtolower($matches[1]);
             $event->add_querylet(new Querylet('images.ext = :ext', ["ext" => $ext]));
-        } elseif ($matches = $event->matches("/^mime[=|:](.+)$/i")) {
+        } elseif ($matches = $event->matches("/^mime[=:](.+)$/i")) {
             $mime = strtolower($matches[1]);
             $event->add_querylet(new Querylet("images.mime = :mime", ["mime" => $mime]));
         }

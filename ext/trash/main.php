@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Shimmie2;
 
+/** @extends Extension<TrashTheme> */
 final class Trash extends Extension
 {
     public const KEY = "trash";
-    /** @var TrashTheme */
-    protected Themelet $theme;
 
     public function get_priority(): int
     {
@@ -67,7 +66,7 @@ final class Trash extends Extension
     {
         if ($event->parent === "posts") {
             if (Ctx::$user->can(TrashPermission::VIEW_TRASH)) {
-                $event->add_nav_link(search_link(['in:trash']), "Trash", order: 60);
+                $event->add_nav_link(search_link(['in=trash']), "Trash", order: 60);
             }
         }
     }
@@ -75,11 +74,11 @@ final class Trash extends Extension
     public function onUserBlockBuilding(UserBlockBuildingEvent $event): void
     {
         if (Ctx::$user->can(TrashPermission::VIEW_TRASH)) {
-            $event->add_link("Trash", search_link(["in:trash"]), 60);
+            $event->add_link("Trash", search_link(["in=trash"]), 60);
         }
     }
 
-    public const SEARCH_REGEXP = "/^in:(trash)$/i";
+    public const SEARCH_REGEXP = "/^in[=:](trash)$/i";
     public function onSearchTermParse(SearchTermParseEvent $event): void
     {
         if (is_null($event->term) && $this->no_trash_query($event->context)) {
@@ -133,15 +132,15 @@ final class Trash extends Extension
 
     public function onBulkActionBlockBuilding(BulkActionBlockBuildingEvent $event): void
     {
-        if (Ctx::$user->can(TrashPermission::VIEW_TRASH) && in_array("in:trash", $event->search_terms)) {
-            $event->add_action("bulk_trash_restore", "(U)ndelete", "u");
+        if (in_array("in:trash", $event->search_terms)) {
+            $event->add_action("trash-restore", "(U)ndelete", "u", permission: TrashPermission::VIEW_TRASH);
         }
     }
 
     public function onBulkAction(BulkActionEvent $event): void
     {
         switch ($event->action) {
-            case "bulk_trash_restore":
+            case "trash-restore":
                 if (Ctx::$user->can(TrashPermission::VIEW_TRASH)) {
                     $total = 0;
                     foreach ($event->items as $image) {

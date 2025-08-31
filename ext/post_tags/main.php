@@ -114,14 +114,16 @@ final class TagTermParseEvent extends Event
     }
 }
 
+/** @extends Extension<PostTagsTheme> */
 final class PostTags extends Extension
 {
     public const KEY = "post_tags";
-    /** @var PostTagsTheme */
-    protected Themelet $theme;
 
     public function onPageRequest(PageRequestEvent $event): void
     {
+        if (Ctx::$config->get(PostTagsConfig::FORCE_LOWERCASE)) {
+            Ctx::$page->add_html_header(\MicroHTML\STYLE(".autocomplete_tags {text-transform: lowercase;}"));
+        }
         if ($event->page_matches("tag_edit/replace", method: "POST", permission: PostTagsPermission::MASS_TAG_EDIT)) {
             $this->mass_tag_edit($event->POST->req('search'), $event->POST->req('replace'), true);
             Ctx::$page->set_redirect(make_link("admin"));
@@ -169,7 +171,7 @@ final class PostTags extends Extension
 
     public function onSearchTermParse(SearchTermParseEvent $event): void
     {
-        if ($matches = $event->matches("/^tags([:]?<|[:]?>|[:]?<=|[:]?>=|[:|=])(\d+)$/i")) {
+        if ($matches = $event->matches("/^tags(:|<=|<|=|>|>=)(\d+)$/i")) {
             $cmp = ltrim($matches[1], ":") ?: "=";
             $count = $matches[2];
             $event->add_querylet(
@@ -194,6 +196,7 @@ final class PostTags extends Extension
             send_event(new TagTermParseEvent($tag, $event->image->id));
         }
     }
+
     public function onImageDeletion(ImageDeletionEvent $event): void
     {
         $event->image->delete_tags_from_image();
@@ -262,7 +265,7 @@ final class PostTags extends Extension
         Log::info("tag_edit", "Mass editing tags: '$search' -> '$replace'");
 
         if (count($search_set) === 1 && count($replace_set) === 1) {
-            $images = Search::find_images(limit: 10, tags: $replace_set);
+            $images = Search::find_images(limit: 10, terms: $replace_set);
             if (count($images) === 0) {
                 Log::info("tag_edit", "No images found with target tag, doing in-place rename");
                 $database->execute(
@@ -288,7 +291,7 @@ final class PostTags extends Extension
                 $search_forward[] = "id<$last_id";
             }
 
-            $images = Search::find_images(limit: 100, tags: $search_forward);
+            $images = Search::find_images(limit: 100, terms: $search_forward);
             if (count($images) === 0) {
                 break;
             }

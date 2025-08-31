@@ -56,25 +56,21 @@ final class AddAutoTagException extends SCoreException
 {
 }
 
+/** @extends Extension<AutoTaggerTheme> */
 final class AutoTagger extends Extension
 {
     public const KEY = "auto_tagger";
     public const VERSION_KEY = "ext_auto_tagger_ver";
 
-    /** @var AutoTaggerTheme */
-    protected Themelet $theme;
-
     public function onPageRequest(PageRequestEvent $event): void
     {
         $page = Ctx::$page;
         if ($event->page_matches("auto_tag/add", method: "POST", permission: AutoTaggerPermission::MANAGE_AUTO_TAG)) {
-            $input = validate_input(["c_tag" => "string", "c_additional_tags" => "string"]);
-            send_event(new AddAutoTagEvent($input['c_tag'], $input['c_additional_tags']));
+            send_event(new AddAutoTagEvent($event->POST->req('c_tag'), $event->POST->req('c_additional_tags')));
             $page->set_redirect(make_link("auto_tag/list"));
         }
         if ($event->page_matches("auto_tag/remove", method: "POST", permission: AutoTaggerPermission::MANAGE_AUTO_TAG)) {
-            $input = validate_input(["d_tag" => "string"]);
-            send_event(new DeleteAutoTagEvent($input['d_tag']));
+            send_event(new DeleteAutoTagEvent($event->POST->req('d_tag')));
             $page->set_redirect(make_link("auto_tag/list"));
         }
         if ($event->page_matches("auto_tag/list")) {
@@ -89,8 +85,7 @@ final class AutoTagger extends Extension
             $this->theme->display_auto_tagtable($t->table($t->query()), $t->paginator());
         }
         if ($event->page_matches("auto_tag/export/auto_tag.csv")) {
-            $page->set_filename("auto_tag.csv");
-            $page->set_data(MimeType::CSV, $this->get_auto_tag_csv(Ctx::$database));
+            $page->set_data(MimeType::CSV, $this->get_auto_tag_csv(Ctx::$database), filename: "auto_tag.csv");
         }
         if ($event->page_matches("auto_tag/import", method: "POST", permission: AutoTaggerPermission::MANAGE_AUTO_TAG)) {
             if (count($_FILES) > 0) {

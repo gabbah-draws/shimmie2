@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Shimmie2;
 
-use function MicroHTML\{A, ARTICLE, B, BODY, DIV, FOOTER, HEADER, IMG, NAV, SCRIPT, SECTION};
+use function MicroHTML\{A, ARTICLE, B, BODY, DIV, FOOTER, HEADER, IMG, NAV, SECTION};
 
 use MicroHTML\HTMLElement;
 
@@ -12,9 +12,8 @@ use MicroHTML\HTMLElement;
  * Name: Lite Theme
  * Author: Zach Hall <zach@sosguy.net>
  * Link: http://seemslegit.com
- * License: GPLv2
  * Description: A mashup of Default, Danbooru, the interface on qwebirc, and
- * 	       some other sites, packaged in a light blue color.
+ * 	            some other sites, packaged in a light blue color.
  */
 
 class LitePage extends Page
@@ -28,14 +27,9 @@ class LitePage extends Page
 
         $menu = DIV(
             ["class" => "menu"],
-            SCRIPT(["type" => "text/javascript", "src" => "{$data_href}/themes/{$theme_name}/wz_tooltip.js"]),
             A(
-                [
-                    "href" => make_link(),
-                    "onmouseover" => 'Tip("Home", BGCOLOR, "#C3D2E0", FADEIN, 100)',
-                    "onmouseout" => 'UnTip()'
-                ],
-                IMG(["alt" => "", "src" => "{$data_href}/favicon.ico", "style" => "position: relative; top: 3px;"])
+                ["href" => make_link()],
+                IMG(["title" => "Home", "src" => "{$data_href}/favicon.ico", "style" => "position: relative; top: 3px;"])
             ),
             B($site_name)
         );

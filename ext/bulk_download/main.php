@@ -7,20 +7,17 @@ namespace Shimmie2;
 final class BulkDownload extends Extension
 {
     public const KEY = "bulk_download";
-    private const DOWNLOAD_ACTION_NAME = "bulk_download";
 
     public function onBulkActionBlockBuilding(BulkActionBlockBuildingEvent $event): void
     {
-        if (Ctx::$user->can(BulkDownloadPermission::BULK_DOWNLOAD)) {
-            $event->add_action(BulkDownload::DOWNLOAD_ACTION_NAME, "Download ZIP");
-        }
+        $event->add_action("download", "Download ZIP", permission: BulkDownloadPermission::BULK_DOWNLOAD);
     }
 
     public function onBulkAction(BulkActionEvent $event): void
     {
         if (
             Ctx::$user->can(BulkDownloadPermission::BULK_DOWNLOAD)
-            && ($event->action === BulkDownload::DOWNLOAD_ACTION_NAME)
+            && ($event->action === "download")
         ) {
             $download_filename = Ctx::$user->name . '-' . date('YmdHis') . '.zip';
             $zip_filename = shm_tempnam("bulk_download");
@@ -36,15 +33,12 @@ final class BulkDownload extends Extension
                         throw new UserError("Bulk download limited to ".human_filesize($max_size));
                     }
 
-                    $filename = urldecode($image->get_nice_image_name());
-                    $filename = str_replace(":", ";", $filename);
-                    $zip->addFile($img_loc->str(), $filename);
+                    $zip->addFile($img_loc->str(), $image->get_nice_image_name());
                 }
 
                 $zip->close();
 
-                Ctx::$page->set_file(MimeType::ZIP, $zip_filename, true);
-                Ctx::$page->set_filename($download_filename);
+                Ctx::$page->set_file(MimeType::ZIP, $zip_filename, true, filename: $download_filename);
 
                 $event->redirect = false;
             }
